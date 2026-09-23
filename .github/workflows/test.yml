@@ -8,21 +8,60 @@ on:
 
 jobs:
   first:
-    name: First job
+    name: Terraform plan
     runs-on: ubuntu-latest
     steps:
-      - name: Execute first job
-        run: echo "First job completed"
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+      - name: Install tfplan2md
+        env:
+          TFPLAN2MD_VERSION: 1.46.0
+        run: |
+          archive="tfplan2md_${TFPLAN2MD_VERSION}_linux-x64.tar.gz"
+          base_url="https://github.com/oocx/tfplan2md/releases/download/v${TFPLAN2MD_VERSION}"
+          curl -fsSL "${base_url}/${archive}" -o "/tmp/${archive}"
+          curl -fsSL "${base_url}/SHA256SUMS" -o /tmp/tfplan2md-SHA256SUMS
+          (cd /tmp && grep "  ${archive}$" tfplan2md-SHA256SUMS | sha256sum --check)
+          mkdir -p /tmp/tfplan2md
+          tar -xzf "/tmp/${archive}" -C /tmp/tfplan2md
+          echo "/tmp/tfplan2md" >> "$GITHUB_PATH"
+      - name: Initialize Terraform
+        run: terraform init -input=false
+      - name: Create Terraform plan
+        run: terraform plan -input=false -out=tfplan
+      - name: Render plan as Markdown
+        run: |
+          terraform show -json tfplan | tfplan2md --render-target github > plan.md
+          cat plan.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Terraform plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: |
+            tfplan
+            plan.md
 
   second:
-    name: Second job - approval required
+    name: Terraform apply - approval required
     needs: first
     runs-on: ubuntu-latest
     environment:
-      name: test # Preconfigured environment
+      name: test # Preconfigured environment with reviewers
     steps:
-      - name: Execute second job
-        run: echo "Second job approved and completed"
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+      - name: Download Terraform plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+      - name: Initialize Terraform
+        run: terraform init -input=false
+      - name: Apply approved Terraform plan
+        run: terraform apply -input=false tfplan
 
   third:
     name: Third job
