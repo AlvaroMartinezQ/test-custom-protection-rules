@@ -1,0 +1,33 @@
+name: Three-stage workflow
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  first:
+    name: First job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute first job
+        run: echo "First job completed"
+
+  second:
+    name: Second job - approval required
+    needs: first
+    runs-on: ubuntu-latest
+    environment:
+      name: test # Preconfigured environment
+    steps:
+      - name: Execute second job
+        run: echo "Second job approved and completed"
+
+  third:
+    name: Third job
+    needs: second
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute third job
+        run: echo "Third job completed after the second job"
